@@ -118,6 +118,13 @@ class Orchestrator:
         """Run the full multi-agent analysis pipeline."""
         start = time.time()
 
+        # ── Pre-validation: check document relevance ──────────────
+        if not is_demo_mode():
+            rejection = self._validate_document(spec_text)
+            if rejection:
+                rejection.elapsed_seconds = time.time() - start
+                return rejection
+
         # ── Step 1: Geotechnical analysis ────────────────────────────
         self._log("Orchestrator", "Delegating geotechnical analysis to GeoTech-Analyst …")
         geotech_result = self.geotech_agent.run(
@@ -205,6 +212,101 @@ class Orchestrator:
             thinking_log=self.thinking_log,
             elapsed_seconds=elapsed,
         )
+
+    # ------------------------------------------------------------------
+    # Document relevance validation
+    # ------------------------------------------------------------------
+
+    def _validate_document(self, spec_text: str) -> AnalysisReport | None:
+        """Quick check if document is related to tunnel/underground construction.
+        Returns a rejection AnalysisReport if not relevant, or None if valid.
+        """
+        from .core import _get_client, _model_id
+
+        self._log("Orchestrator", "Validating document relevance …")
+
+        # Use first 1000 chars for a fast check
+        preview = spec_text[:1000]
+
+        try:
+            client = _get_client()
+            response = client.chat.completions.create(
+                model=_model_id(),
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a document classifier. Determine if the following document "
+                        "is related to ANY of these topics: tunnel construction, underground "
+                        "excavation, geotechnical engineering, rock mechanics, TBM, drill & blast, "
+                        "tunnel support systems, underground infrastructure contracts, "
+                        "civil engineering specifications, or construction contracts. "
+                        "Respond ONLY with valid JSON: "
+                        '{\"relevant\": true/false, \"document_type\": \"brief description\", '
+                        '\"reason\": \"why it is or is not relevant\"}'
+                    )},
+                    {"role": "user", "content": preview},
+                ],
+                temperature=0.1,
+                max_tokens=200,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content or "{}"
+            result = json.loads(content)
+
+            if result.get("relevant", True):
+                doc_type = result.get("document_type", "tunnel document")
+                self._log("Orchestrator", f"Document validated: {doc_type}")
+                return None  # Document is valid, proceed with analysis
+
+            # Document is NOT relevant — return rejection report
+            doc_type = result.get("document_type", "documento no relacionado")
+            reason = result.get("reason", "")
+            self._log("Orchestrator", f"Document rejected: {doc_type} — {reason}")
+
+            empty_result = AgentResult(
+                agent_name="Orchestrator",
+                raw_response=content,
+                findings=[],
+                risk_level="n/a",
+                confidence=0.0,
+                thinking_log=[],
+            )
+
+            return AnalysisReport(
+                geotech_result=empty_result,
+                contract_result=empty_result,
+                orchestrator_result=empty_result,
+                overall_risk_level="n/a",
+                overall_confidence=0.0,
+                executive_summary=(
+                    f"## Documento No Relacionado\n\n"
+                    f"**Tipo detectado:** {doc_type}\n\n"
+                    f"**Motivo:** {reason}\n\n"
+                    f"TerraTunnel Analyzer está diseñado exclusivamente para analizar "
+                    f"especificaciones técnicas y contratos de construcción de túneles y "
+                    f"obras subterráneas. El documento proporcionado no corresponde a "
+                    f"este ámbito.\n\n"
+                    f"**Tipos de documentos aceptados:**\n"
+                    f"- Especificaciones técnicas de túneles (roca o suelo)\n"
+                    f"- Informes Geotécnicos de Base (GBR)\n"
+                    f"- Contratos de construcción subterránea (FIDIC, NEC, etc.)\n"
+                    f"- Clasificaciones de roca (RMR, Q-system, GSI)\n"
+                    f"- Diseños de sostenimiento de túneles"
+                ),
+                all_findings=[{
+                    "id": "VAL-001",
+                    "type": "validation",
+                    "severity": "info",
+                    "title": "Documento no relacionado con construcción de túneles",
+                    "description": f"{doc_type}: {reason}",
+                }],
+                thinking_log=self.thinking_log,
+            )
+
+        except Exception as exc:
+            # If validation fails, proceed with analysis anyway
+            self._log("Orchestrator", f"Validation skipped (error: {exc})")
+            return None
 
     # ------------------------------------------------------------------
     # Demo synthesis
