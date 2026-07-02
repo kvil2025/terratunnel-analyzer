@@ -1269,3 +1269,98 @@ body::after {
     justify-content: flex-end;
   }
 }
+
+/* ── File Upload Dropzone ───────────────────────────────────── */
+
+.spec-input__dropzone {
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  background: var(--bg-input);
+  margin-bottom: 0.75rem;
+}
+
+.spec-input__dropzone:hover {
+  border-color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.05);
+}
+
+.spec-input__dropzone--active {
+  border-color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.1);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+  transform: scale(1.01);
+}
+
+.spec-input__dropzone--has-file {
+  border-color: var(--severity-low);
+  border-style: solid;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.spec-input__drop-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.spec-input__drop-icon {
+  font-size: 2rem;
+  opacity: 0.7;
+}
+
+.spec-input__drop-formats {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: rgba(100, 116, 139, 0.15);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+}
+
+.spec-input__file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.spec-input__file-icon {
+  font-size: 1.6rem;
+}
+
+.spec-input__file-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.spec-input__file-size {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+}
+
+.spec-input__file-remove {
+  margin-left: auto;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--severity-critical);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all var(--transition-base);
+}
+
+.spec-input__file-remove:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 
 const SAMPLE_SPEC = `PROYECTO: TÚNEL VIAL LOS ANDES — TRAMO KM 0+000 A KM 4+200
 LONGITUD TOTAL: 4.200 metros
@@ -59,8 +59,82 @@ Cláusula 20 — Resolución de Disputas:
 "Toda disputa será resuelta mediante arbitraje ad-hoc bajo las
 reglas de la cámara de comercio local."`;
 
-export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSample, isLoading }) {
+const ACCEPTED_TYPES = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+  'text/plain': '.txt',
+};
+
+export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSample, onFileUpload, isLoading }) {
   const charCount = specText.length;
+  const fileInputRef = useRef(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+
+  const handleFile = (file) => {
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
+      alert('Formato no soportado. Use PDF, DOCX o TXT.');
+      return;
+    }
+
+    setUploadedFile(file);
+
+    // For TXT files, also show content in textarea
+    if (ext === 'txt') {
+      const reader = new FileReader();
+      reader.onload = (e) => onSpecChange(e.target.result);
+      reader.readAsText(file);
+    } else {
+      onSpecChange(`[Documento cargado: ${file.name} — ${(file.size / 1024).toFixed(1)} KB]\n\nEl análisis se ejecutará directamente sobre el contenido extraído del archivo.`);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files?.[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const handleFileInput = (e) => {
+    if (e.target.files?.[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  const handleAnalyzeClick = () => {
+    if (uploadedFile && !uploadedFile.name.endsWith('.txt')) {
+      // For PDF/DOCX, use the file upload endpoint
+      onFileUpload(uploadedFile);
+    } else {
+      // For text input or TXT files, use the text endpoint
+      onAnalyze();
+    }
+  };
+
+  const handleClear = () => {
+    setUploadedFile(null);
+    onSpecChange('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
     <div className="spec-input glass-card">
@@ -68,12 +142,51 @@ export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSam
         📄 Especificación Técnica / Contrato del Túnel
       </label>
 
+      {/* Drop zone */}
+      <div
+        className={`spec-input__dropzone ${dragActive ? 'spec-input__dropzone--active' : ''} ${uploadedFile ? 'spec-input__dropzone--has-file' : ''}`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={() => !isLoading && fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt"
+          onChange={handleFileInput}
+          style={{ display: 'none' }}
+          disabled={isLoading}
+        />
+        {uploadedFile ? (
+          <div className="spec-input__file-info">
+            <span className="spec-input__file-icon">
+              {uploadedFile.name.endsWith('.pdf') ? '📕' : uploadedFile.name.endsWith('.txt') ? '📝' : '📘'}
+            </span>
+            <span className="spec-input__file-name">{uploadedFile.name}</span>
+            <span className="spec-input__file-size">{(uploadedFile.size / 1024).toFixed(1)} KB</span>
+            <button
+              className="spec-input__file-remove"
+              onClick={(e) => { e.stopPropagation(); handleClear(); }}
+              title="Remover archivo"
+            >✕</button>
+          </div>
+        ) : (
+          <div className="spec-input__drop-prompt">
+            <span className="spec-input__drop-icon">📂</span>
+            <span>Arrastra un archivo aquí o haz clic para seleccionar</span>
+            <span className="spec-input__drop-formats">PDF, DOCX, TXT</span>
+          </div>
+        )}
+      </div>
+
+      {/* Text area (still available for pasting) */}
       <textarea
         id="spec-textarea"
         className="spec-input__textarea"
         value={specText}
-        onChange={(e) => onSpecChange(e.target.value)}
-        placeholder="Pega aquí las especificaciones técnicas, cláusulas contractuales, o extractos del GBR de tu proyecto de túnel…"
+        onChange={(e) => { onSpecChange(e.target.value); setUploadedFile(null); }}
+        placeholder="...o pega aquí las especificaciones técnicas, cláusulas contractuales, o extractos del GBR de tu proyecto de túnel"
         disabled={isLoading}
       />
 
@@ -81,8 +194,8 @@ export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSam
         <button
           id="btn-analyze"
           className="btn btn--primary"
-          onClick={onAnalyze}
-          disabled={isLoading || charCount < 20}
+          onClick={handleAnalyzeClick}
+          disabled={isLoading || (charCount < 20 && !uploadedFile)}
         >
           {isLoading ? (
             <>
@@ -90,14 +203,14 @@ export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSam
               Analizando…
             </>
           ) : (
-            <>🔍 Analizar Especificaciones</>
+            <>🔍 Analizar {uploadedFile ? 'Documento' : 'Especificaciones'}</>
           )}
         </button>
 
         <button
           id="btn-load-sample"
           className="btn btn--secondary"
-          onClick={() => onLoadSample(SAMPLE_SPEC)}
+          onClick={() => { setUploadedFile(null); onLoadSample(SAMPLE_SPEC); }}
           disabled={isLoading}
         >
           📋 Cargar Ejemplo

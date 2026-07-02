@@ -113,6 +113,67 @@ export default function App() {
     }
   }, [specText]);
 
+  const handleFileUpload = useCallback(async (file) => {
+    if (!file) return;
+
+    setIsLoading(true);
+    setReport(null);
+    setError(null);
+    setAgentStatus('running');
+    setThinkingLog([
+      { agent: 'Orchestrator', message: `Procesando documento: ${file.name}…`, timestamp: Date.now() / 1000 },
+    ]);
+
+    // Progress messages
+    const progressMessages = [
+      { agent: 'System', message: `Extrayendo texto de ${file.name.split('.').pop().toUpperCase()}…`, delay: 300 },
+      { agent: 'GeoTech-Analyst', message: 'Analizando clasificación de roca (RMR/Q-system)…', delay: 1500 },
+      { agent: 'Contract-Risk-Analyst', message: 'Evaluando asignación de riesgos…', delay: 3000 },
+      { agent: 'Tunnel-Director', message: 'Sintetizando hallazgos inter-disciplinarios…', delay: 5000 },
+    ];
+    progressMessages.forEach(({ agent, message, delay }) => {
+      setTimeout(() => {
+        setThinkingLog(prev => [...prev, { agent, message, timestamp: Date.now() / 1000 }]);
+      }, delay);
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Error del servidor: ${response.status}`);
+      }
+
+      setThinkingLog(prev => [
+        ...prev,
+        { agent: 'System', message: `Texto extraído: ${(data.extracted_chars || 0).toLocaleString()} caracteres`, timestamp: Date.now() / 1000 },
+        { agent: 'Orchestrator', message: `Análisis completado — ${(data.all_findings || []).length} hallazgos`, timestamp: Date.now() / 1000 },
+      ]);
+
+      setReport(data);
+      setAgentStatus('done');
+
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err.message);
+      setThinkingLog(prev => [
+        ...prev,
+        { agent: 'System', message: `Error: ${err.message}`, timestamp: Date.now() / 1000 },
+      ]);
+      setAgentStatus('idle');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return (
     <>
       <Header mode={mode} />
@@ -124,6 +185,7 @@ export default function App() {
             specText={specText}
             onSpecChange={setSpecText}
             onAnalyze={handleAnalyze}
+            onFileUpload={handleFileUpload}
             onLoadSample={handleLoadSample}
             isLoading={isLoading}
           />

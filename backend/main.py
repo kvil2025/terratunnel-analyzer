@@ -6,6 +6,7 @@ In production, also serves the compiled React frontend as static files.
 
 Endpoints:
   POST /api/analyze  — Run multi-agent analysis on spec text
+  POST /api/upload   — Upload PDF/DOCX/TXT and run analysis
   GET  /api/health   — Health check (includes mode detection)
   GET  /api/demo     — Run with sample tunnel specification
   *    /*             — Serve React SPA (production only)
@@ -13,14 +14,15 @@ Endpoints:
 
 from __future__ import annotations
 
+import io
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -178,6 +180,73 @@ async def analyze(req: AnalyzeRequest):
     orchestrator = Orchestrator()
     report = orchestrator.analyze(req.spec_text)
     return report.to_dict()
+
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload a PDF, DOCX, or TXT file and run multi-agent analysis."""
+    if not file.filename:
+        return JSONResponse({"error": "No file provided"}, status_code=400)
+
+    ext = Path(file.filename).suffix.lower()
+    raw_bytes = await file.read()
+
+    try:
+        if ext == ".pdf":
+            text = _extract_pdf(raw_bytes)
+        elif ext in (".docx", ".doc"):
+            text = _extract_docx(raw_bytes)
+        elif ext == ".txt":
+            text = raw_bytes.decode("utf-8", errors="replace")
+        else:
+            return JSONResponse(
+                {"error": f"Formato no soportado: {ext}. Use PDF, DOCX o TXT."},
+                status_code=400,
+            )
+    except Exception as exc:
+        return JSONResponse(
+            {"error": f"Error al leer el archivo: {exc}"},
+            status_code=422,
+        )
+
+    if len(text.strip()) < 20:
+        return JSONResponse(
+            {"error": "El archivo no contiene suficiente texto para analizar."},
+            status_code=422,
+        )
+
+    orchestrator = Orchestrator()
+    report = orchestrator.analyze(text)
+    return {
+        "source_file": file.filename,
+        "extracted_chars": len(text),
+        "extracted_text_preview": text[:500],
+        **report.to_dict(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# File parsing helpers
+# ---------------------------------------------------------------------------
+
+def _extract_pdf(raw_bytes: bytes) -> str:
+    """Extract text from a PDF using PyMuPDF (fitz)."""
+    import fitz  # PyMuPDF
+
+    pages = []
+    with fitz.open(stream=raw_bytes, filetype="pdf") as doc:
+        for page in doc:
+            pages.append(page.get_text())
+    return "\n\n".join(pages)
+
+
+def _extract_docx(raw_bytes: bytes) -> str:
+    """Extract text from a DOCX using python-docx."""
+    from docx import Document
+
+    doc = Document(io.BytesIO(raw_bytes))
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs)
 
 
 @app.get("/api/demo")
