@@ -133,13 +133,13 @@ class Agent:
     # ------------------------------------------------------------------
 
     def _live_run(self) -> AgentResult:
-        self.thinking_log.append(f"[{self.name}] Calling GLM-5.2 …")
+        self.thinking_log.append(f"[{self.name}] Calling {self._model} …")
         try:
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=[m.to_api() for m in self.history],
                 temperature=0.3,
-                max_tokens=4096,
+                max_tokens=2048,
                 response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or ""
