@@ -235,8 +235,10 @@ def _extract_pdf(raw_bytes: bytes) -> str:
 
     pages = []
     with fitz.open(stream=raw_bytes, filetype="pdf") as doc:
-        for page in doc:
-            pages.append(page.get_text())
+        for i, page in enumerate(doc):
+            text = page.get_text()
+            if text.strip():
+                pages.append(f"[PÁGINA {i + 1}]\n{text}")
     return "\n\n".join(pages)
 
 

@@ -20,9 +20,8 @@ function FindingsTable({ findings, title, icon }) {
 
   // Normalize findings to handle various formats from Gemini
   const normalized = findings.map((f, i) => {
-    // If finding is a string, wrap it
     if (typeof f === 'string') {
-      return { id: `F-${i + 1}`, severity: 'medium', title: '', description: f, recommended_action: '' };
+      return { id: `F-${i + 1}`, severity: 'medium', title: '', description: f };
     }
 
     // If finding has 'type: text' with raw JSON in description, try to parse it
@@ -30,80 +29,88 @@ function FindingsTable({ findings, title, icon }) {
       try {
         const parsed = JSON.parse(f.description);
         const innerFindings = parsed.findings || [parsed];
-        return innerFindings.map((inner, j) => ({
-          id: inner.id || `F-${i + 1}.${j + 1}`,
-          severity: inner.severity || inner.combined_severity || inner.risk_level || 'medium',
-          title: inner.title || inner.finding || inner.issue || '',
-          description: inner.description || inner.detail || inner.explanation || '',
-          category: inner.category || inner.type || '',
-          recommended_action: inner.recommended_action || inner.recommendation || inner.action || inner.mitigation || '',
-          spec_reference: inner.spec_reference || inner.reference || inner.clause || '',
-          standard_reference: inner.standard_reference || '',
-        }));
+        return innerFindings.map((inner, j) => normalizeFields(inner, `F-${i + 1}.${j + 1}`));
       } catch { /* fall through */ }
     }
 
-    // Standard normalization — handle various field names Gemini might use
-    return {
-      id: f.id || `F-${i + 1}`,
-      severity: f.severity || f.combined_severity || f.risk_level || 'medium',
-      title: f.title || f.finding || f.issue || f.name || '',
-      description: f.description || f.detail || f.explanation || f.analysis || '',
-      category: f.category || f.type || f.area || '',
-      recommended_action: f.recommended_action || f.recommendation || f.action || f.mitigation || f.suggested_action || '',
-      spec_reference: f.spec_reference || f.clause_reference || f.reference || f.clause || f.geotech_finding_id || '',
-      standard_reference: f.standard_reference || f.contract_finding_id || f.norm || '',
-    };
-  }).flat(); // flat() handles the case where a single finding expands into multiple
+    return normalizeFields(f, `F-${i + 1}`);
+  }).flat();
 
   if (normalized.length === 0) return null;
 
   return (
     <div className="findings-section glass-card">
-      <div className="findings-section__title">{icon} {title}</div>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="findings-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Severidad</th>
-              <th>Hallazgo</th>
-              <th>Referencia</th>
-              <th>Acción Recomendada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {normalized.map((f, i) => (
-              <tr key={f.id || i}>
-                <td>
-                  <div className="findings-table__id">{f.id}</div>
-                  <div className="findings-table__category">{f.category}</div>
-                </td>
-                <td><SeverityBadge severity={f.severity} /></td>
-                <td>
-                  <div className="findings-table__title-text">{f.title}</div>
-                  <div className="findings-table__description">{f.description}</div>
-                </td>
-                <td style={{ fontSize: '0.75rem', minWidth: 140 }}>
-                  <div style={{ color: 'var(--cyan-400)', marginBottom: '0.25rem' }}>
-                    {f.spec_reference || '—'}
-                  </div>
-                  <div style={{ color: 'var(--text-muted)' }}>
-                    {f.standard_reference}
-                  </div>
-                </td>
-                <td>
-                  <div className="findings-table__action">
-                    {f.recommended_action || '—'}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="findings-section__title">{icon} {title} ({normalized.length})</div>
+      <div className="findings-cards">
+        {normalized.map((f, i) => (
+          <div key={f.id || i} className={`finding-card finding-card--${f.severity}`}>
+            {/* Header: ID + Severity + Page */}
+            <div className="finding-card__header">
+              <span className="finding-card__id">{f.id}</span>
+              <SeverityBadge severity={f.severity} />
+              {f.page_number && (
+                <span className="finding-card__page">📄 {f.page_number}</span>
+              )}
+              {f.category && (
+                <span className="finding-card__category-tag">{f.category}</span>
+              )}
+            </div>
+
+            {/* Title */}
+            <div className="finding-card__title">{f.title}</div>
+
+            {/* Description */}
+            <div className="finding-card__description">{f.description}</div>
+
+            {/* Quote (blockquote) */}
+            {f.quote && (
+              <blockquote className="finding-card__quote">
+                <span className="finding-card__quote-icon">❝</span>
+                {f.quote}
+              </blockquote>
+            )}
+
+            {/* References + Action */}
+            <div className="finding-card__footer">
+              <div className="finding-card__refs">
+                {f.spec_reference && (
+                  <span className="finding-card__ref-tag finding-card__ref-tag--doc">
+                    📎 {f.spec_reference}
+                  </span>
+                )}
+                {f.standard_reference && (
+                  <span className="finding-card__ref-tag finding-card__ref-tag--std">
+                    📐 {f.standard_reference}
+                  </span>
+                )}
+              </div>
+              {f.recommended_action && (
+                <div className="finding-card__action">
+                  <span className="finding-card__action-label">✅ Acción:</span> {f.recommended_action}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
+}
+
+function normalizeFields(f, fallbackId) {
+  return {
+    id: f.id || fallbackId,
+    severity: f.severity || f.combined_severity || f.risk_level || 'medium',
+    title: f.title || f.finding || f.issue || f.name || '',
+    description: f.description || f.detail || f.explanation || f.analysis || '',
+    category: f.category || f.type || f.area || '',
+    page_number: f.page_number || f.page || f.pagina || '',
+    quote: f.quote || f.cita || f.excerpt || f.text_evidence || '',
+    spec_reference: f.spec_reference || f.clause_reference || f.reference || f.clause || '',
+    standard_reference: f.standard_reference || f.contract_finding_id || f.norm || '',
+    recommended_action: f.recommended_action || f.recommendation || f.action || f.mitigation || '',
+    risk_owner: f.risk_owner || '',
+  };
 }
 
 function ExecutiveSummary({ summary }) {
