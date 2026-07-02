@@ -72,12 +72,27 @@ export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSam
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
 
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const MAX_FILE_SIZE_MB = isLocal ? 50 : 4;
+  const [fileSizeError, setFileSizeError] = useState(null);
+
   const handleFile = (file) => {
     if (!file) return;
+    setFileSizeError(null);
 
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
       alert('Formato no soportado. Use PDF, DOCX o TXT.');
+      return;
+    }
+
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > MAX_FILE_SIZE_MB) {
+      setFileSizeError(
+        isLocal
+          ? `El archivo (${sizeMB.toFixed(1)} MB) excede el límite de ${MAX_FILE_SIZE_MB} MB.`
+          : `El archivo (${sizeMB.toFixed(1)} MB) excede el límite de Vercel (${MAX_FILE_SIZE_MB} MB). Para documentos grandes, ejecuta localmente: http://localhost:8000`
+      );
       return;
     }
 
@@ -179,6 +194,13 @@ export default function SpecInput({ specText, onSpecChange, onAnalyze, onLoadSam
           </div>
         )}
       </div>
+
+      {/* File size error */}
+      {fileSizeError && (
+        <div className="spec-input__size-error">
+          ⚠️ {fileSizeError}
+        </div>
+      )}
 
       {/* Text area (still available for pasting) */}
       <textarea

@@ -1364,3 +1364,15 @@ body::after {
   background: rgba(239, 68, 68, 0.3);
 }
 
+.spec-input__size-error {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: var(--accent-amber);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+  animation: slide-in 0.3s var(--ease-spring);
+}
+
