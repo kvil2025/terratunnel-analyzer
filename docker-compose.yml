@@ -1,0 +1,33 @@
+# ============================================================
+# TerraTunnel Analyzer — Docker Compose
+# ============================================================
+# Usage:
+#   docker compose up              → Start in DEMO mode
+#   docker compose up --build      → Rebuild and start
+#
+# To use LIVE mode with your API key:
+#   1. Copy .env.example to .env in project root
+#   2. Set ZHIPU_API_KEY=your_real_key
+#   3. Set MODE=live (or remove MODE to auto-detect)
+#   4. docker compose up --build
+# ============================================================
+
+services:
+  terratunnel:
+    build: .
+    container_name: terratunnel-analyzer
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - MODE=${MODE:-demo}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+      - ZHIPU_API_BASE=${ZHIPU_API_BASE:-https://api.z.ai/api/paas/v4}
+      - GLM_MODEL=${GLM_MODEL:-glm-5.2}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

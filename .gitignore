@@ -1,0 +1,28 @@
+# ── Dependencies ──────────────────────────────────
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Build outputs (regenerated on deploy) ─────────
+frontend/dist/
+backend/static/
+
+# ── Environment (secrets) ─────────────────────────
+.env
+backend/.env
+
+# ── IDE / OS ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Python ────────────────────────────────────────
+*.egg-info/
+dist/
+build/
+.eggs/
