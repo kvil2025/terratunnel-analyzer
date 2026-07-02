@@ -165,26 +165,57 @@ class Agent:
 
     def _parse_response(self, content: str) -> AgentResult:
         """Try to parse the assistant response as JSON; fall back to plain text."""
-        try:
-            data = json.loads(content)
+        import re
+
+        def _try_parse(text: str) -> dict | None:
+            """Attempt to parse a string as JSON."""
+            text = text.strip()
+            if not text:
+                return None
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return None
+
+        # Strategy 1: Direct parse
+        data = _try_parse(content)
+
+        # Strategy 2: Extract from markdown code fence ```json ... ```
+        if data is None:
+            md_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', content, re.DOTALL)
+            if md_match:
+                data = _try_parse(md_match.group(1))
+
+        # Strategy 3: Find the first { ... } block (greedy)
+        if data is None:
+            brace_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if brace_match:
+                data = _try_parse(brace_match.group(0))
+
+        if data is not None and isinstance(data, dict):
+            findings = data.get("findings", [])
+            self.thinking_log.append(
+                f"[{self.name}] Parsed JSON: {len(findings)} findings"
+            )
             return AgentResult(
                 agent_name=self.name,
                 raw_response=content,
-                findings=data.get("findings", []),
+                findings=findings,
                 risk_level=data.get("risk_level", "medium"),
                 confidence=data.get("confidence", 0.75),
                 thinking_log=list(self.thinking_log),
             )
-        except json.JSONDecodeError:
-            self.thinking_log.append(f"[{self.name}] Response was not valid JSON, wrapping as text.")
-            return AgentResult(
-                agent_name=self.name,
-                raw_response=content,
-                findings=[{"type": "text", "description": content}],
-                risk_level="medium",
-                confidence=0.5,
-                thinking_log=list(self.thinking_log),
-            )
+
+        # All strategies failed — wrap as text
+        self.thinking_log.append(f"[{self.name}] Response was not valid JSON, wrapping as text.")
+        return AgentResult(
+            agent_name=self.name,
+            raw_response=content,
+            findings=[{"type": "text", "description": content}],
+            risk_level="medium",
+            confidence=0.5,
+            thinking_log=list(self.thinking_log),
+        )
 
     # ------------------------------------------------------------------
     # Demo mode (no API key required)
