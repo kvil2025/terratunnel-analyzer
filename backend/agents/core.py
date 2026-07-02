@@ -133,31 +133,66 @@ class Agent:
     # ------------------------------------------------------------------
 
     def _live_run(self) -> AgentResult:
-        self.thinking_log.append(f"[{self.name}] Calling {self._model} …")
-        try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[m.to_api() for m in self.history],
-                temperature=0.3,
-                max_tokens=2048,
-                response_format={"type": "json_object"},
-            )
-            content = response.choices[0].message.content or ""
-            self.history.append(AgentMessage(role="assistant", content=content))
-            self.thinking_log.append(f"[{self.name}] Received response ({len(content)} chars)")
-            return self._parse_response(content)
+        import time as _time
 
-        except Exception as exc:
-            error_msg = f"[{self.name}] API error: {exc}"
-            self.thinking_log.append(error_msg)
-            return AgentResult(
-                agent_name=self.name,
-                raw_response=error_msg,
-                findings=[{"type": "error", "description": str(exc)}],
-                risk_level="unknown",
-                confidence=0.0,
-                thinking_log=list(self.thinking_log),
-            )
+        self.thinking_log.append(f"[{self.name}] Calling {self._model} …")
+
+        max_retries = 3
+        retry_delays = [2, 5, 10]  # seconds
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[m.to_api() for m in self.history],
+                    temperature=0.3,
+                    max_tokens=4096,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content or ""
+                self.history.append(AgentMessage(role="assistant", content=content))
+                self.thinking_log.append(f"[{self.name}] Received response ({len(content)} chars)")
+                return self._parse_response(content)
+
+            except Exception as exc:
+                error_str = str(exc)
+
+                # Retry on rate limit (429)
+                if "429" in error_str and attempt < max_retries:
+                    delay = retry_delays[attempt]
+                    self.thinking_log.append(
+                        f"[{self.name}] Rate limit (429). Retry {attempt + 1}/{max_retries} in {delay}s …"
+                    )
+                    _time.sleep(delay)
+                    continue
+
+                # Non-retryable error or max retries exhausted
+                if "429" in error_str:
+                    user_msg = (
+                        f"Límite de cuota de Gemini excedido. "
+                        f"El plan gratuito permite ~20 solicitudes/día para gemini-2.5-flash. "
+                        f"Opciones: (1) Esperar unos minutos y reintentar, "
+                        f"(2) Usar otro API key, (3) Actualizar a plan de pago en ai.google.dev"
+                    )
+                else:
+                    user_msg = f"Error de API: {error_str[:200]}"
+
+                self.thinking_log.append(f"[{self.name}] API error: {error_str[:200]}")
+                return AgentResult(
+                    agent_name=self.name,
+                    raw_response=error_str,
+                    findings=[{
+                        "id": "ERR-001",
+                        "type": "error",
+                        "severity": "critical",
+                        "title": "Error de API",
+                        "description": user_msg,
+                        "recommended_action": "Reintentar el análisis o verificar la configuración del API key.",
+                    }],
+                    risk_level="unknown",
+                    confidence=0.0,
+                    thinking_log=list(self.thinking_log),
+                )
 
     # ------------------------------------------------------------------
     # Response parsing

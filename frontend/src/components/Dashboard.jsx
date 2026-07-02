@@ -154,26 +154,38 @@ function downloadJSON(report) {
 }
 
 function downloadHTML(report) {
-  const geotechFindings = report.geotech?.findings || [];
-  const contractFindings = report.contract?.findings || [];
-  const crossDomain = report.cross_domain_findings || [];
+  const norm = (findings) => findings.map((f, i) => normalizeFields(f, `F-${i+1}`));
+  const geotechFindings = norm(report.geotech?.findings || []);
+  const contractFindings = norm(report.contract?.findings || []);
+  const crossDomain = norm(report.cross_domain_findings || []);
   const supportComp = report.support_comparison || [];
 
-  const findingsToRows = (findings) => findings.map(f => `
-    <tr>
-      <td><strong>${f.id || '—'}</strong><br><small>${f.category || f.type || ''}</small></td>
-      <td><span class="badge badge--${f.severity || f.combined_severity || 'medium'}">${(f.severity || f.combined_severity || 'medium').toUpperCase()}</span></td>
-      <td><strong>${f.title || ''}</strong><br>${f.description || ''}</td>
-      <td>${f.recommended_action || '—'}</td>
-    </tr>
-  `).join('');
+  const severityColor = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+
+  const findingToCard = (f) => `
+    <div style="border-left: 4px solid ${severityColor[f.severity] || '#64748b'}; background: rgba(17,24,39,0.5); border-radius: 0 12px 12px 0; padding: 1.25rem; margin-bottom: 1rem;">
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem;">
+        <span style="font-family: monospace; font-weight: 700; font-size: 0.78rem; color: #22d3ee; background: rgba(6,182,212,0.1); padding: 0.15rem 0.5rem; border-radius: 4px;">${f.id}</span>
+        <span class="badge badge--${f.severity}">${f.severity.toUpperCase()}</span>
+        ${f.page_number ? `<span style="font-size: 0.75rem; color: #f59e0b; background: rgba(245,158,11,0.1); padding: 0.15rem 0.5rem; border-radius: 4px;">📄 ${f.page_number}</span>` : ''}
+        ${f.category ? `<span style="font-size: 0.68rem; color: #64748b; background: rgba(100,116,139,0.12); padding: 0.12rem 0.45rem; border-radius: 4px; text-transform: uppercase;">${f.category}</span>` : ''}
+      </div>
+      <div style="font-weight: 700; font-size: 0.95rem; color: #f1f5f9; margin-bottom: 0.4rem;">${f.title}</div>
+      <div style="font-size: 0.83rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 0.5rem;">${f.description}</div>
+      ${f.quote ? `<blockquote style="background: rgba(6,182,212,0.05); border-left: 3px solid #22d3ee; padding: 0.75rem 1rem; margin: 0.5rem 0; font-size: 0.8rem; color: #94a3b8; font-style: italic; border-radius: 0 8px 8px 0;">❝ ${f.quote}</blockquote>` : ''}
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+        ${f.spec_reference ? `<span style="font-size: 0.72rem; font-family: monospace; background: rgba(6,182,212,0.1); color: #22d3ee; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(6,182,212,0.2);">📎 ${f.spec_reference}</span>` : ''}
+        ${f.standard_reference ? `<span style="font-size: 0.72rem; font-family: monospace; background: rgba(245,158,11,0.1); color: #f59e0b; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(245,158,11,0.2);">📐 ${f.standard_reference}</span>` : ''}
+      </div>
+      ${f.recommended_action ? `<div style="font-size: 0.8rem; color: #22c55e; background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.15); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.5rem;">✅ <strong>Acción:</strong> ${f.recommended_action}</div>` : ''}
+    </div>`;
 
   const supportRows = supportComp.map(s => `
     <tr class="row--${s.status}">
-      <td><strong>${s.section}</strong><br>${s.rock_class}</td>
-      <td>${s.contract_support}</td>
-      <td>${s.standard_support}</td>
-      <td>${s.recommendation}</td>
+      <td><strong>${s.section || ''}</strong><br>${s.rock_class || ''}</td>
+      <td>${s.contract_support || ''}</td>
+      <td>${s.standard_support || ''}</td>
+      <td>${s.recommendation || ''}</td>
     </tr>
   `).join('');
 
@@ -184,10 +196,9 @@ function downloadHTML(report) {
   <title>TerraTunnel Analyzer — Reporte</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', 'Inter', sans-serif; background: #111827; color: #e2e8f0; padding: 2rem; line-height: 1.6; }
+    body { font-family: 'Segoe UI', 'Inter', sans-serif; background: #111827; color: #e2e8f0; padding: 2rem; line-height: 1.6; max-width: 900px; margin: 0 auto; }
     h1 { color: #22d3ee; margin-bottom: 0.5rem; }
     h2 { color: #f1f5f9; border-bottom: 1px solid #374151; padding-bottom: 0.5rem; margin: 2rem 0 1rem; }
-    h3 { color: #94a3b8; margin: 1.5rem 0 0.5rem; }
     .meta { color: #64748b; font-size: 0.85rem; margin-bottom: 2rem; }
     .risk-badge { display: inline-block; padding: 0.4rem 1.2rem; border-radius: 8px; font-weight: 700; font-size: 1.1rem; text-transform: uppercase; }
     .risk-badge--critical { background: rgba(239,68,68,0.2); color: #ef4444; }
@@ -195,23 +206,20 @@ function downloadHTML(report) {
     .risk-badge--medium { background: rgba(234,179,8,0.2); color: #eab308; }
     .risk-badge--low { background: rgba(34,197,94,0.2); color: #22c55e; }
     table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-    th { text-align: left; padding: 0.6rem 0.75rem; background: rgba(17,24,39,0.8); color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #374151; }
+    th { text-align: left; padding: 0.6rem; background: rgba(17,24,39,0.8); color: #64748b; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #374151; }
     td { padding: 0.75rem; border-bottom: 1px solid rgba(55,65,81,0.3); font-size: 0.85rem; vertical-align: top; }
     .badge { padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
     .badge--critical { background: rgba(239,68,68,0.15); color: #ef4444; }
     .badge--high { background: rgba(249,115,22,0.15); color: #f97316; }
     .badge--medium { background: rgba(234,179,8,0.15); color: #eab308; }
     .badge--low { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .row--critical td { border-left: 3px solid #ef4444; }
-    .row--warning td { border-left: 3px solid #eab308; }
-    .row--ok td { border-left: 3px solid #22c55e; }
     .summary-block { background: rgba(17,24,39,0.5); border: 1px solid #374151; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; white-space: pre-wrap; }
-    @media print { body { background: #fff; color: #111; } th { background: #f3f4f6; color: #374151; } .risk-badge--critical, .badge--critical { color: #dc2626; } .risk-badge--high, .badge--high { color: #ea580c; } }
+    @media print { body { background: #fff; color: #111; max-width: 100%; } blockquote { border-left-color: #0891b2 !important; } }
   </style>
 </head>
 <body>
   <h1>⛏️ TerraTunnel Analyzer — Reporte de Análisis</h1>
-  <div class="meta">Generado: ${new Date().toLocaleString('es-ES')} · Modelo: GLM-5.2 · Análisis: ${(report.elapsed_seconds || 0).toFixed(1)}s</div>
+  <div class="meta">Generado: ${new Date().toLocaleString('es-ES')} · Modelo: Gemini 2.5 Flash · Análisis: ${(report.elapsed_seconds || 0).toFixed(1)}s</div>
 
   <p>Nivel de riesgo global: <span class="risk-badge risk-badge--${report.overall_risk_level || 'medium'}">${(report.overall_risk_level || 'medio').toUpperCase()}</span></p>
   <p style="margin-top: 0.5rem; color: #94a3b8;">Confianza: ${Math.round((report.overall_confidence || 0) * 100)}%</p>
@@ -226,17 +234,17 @@ function downloadHTML(report) {
   </table>` : ''}
 
   <h2>⛏️ Hallazgos Geotécnicos (${geotechFindings.length})</h2>
-  <table><thead><tr><th>ID</th><th>Severidad</th><th>Hallazgo</th><th>Acción</th></tr></thead><tbody>${findingsToRows(geotechFindings)}</tbody></table>
+  ${geotechFindings.map(findingToCard).join('')}
 
   <h2>📜 Hallazgos Contractuales (${contractFindings.length})</h2>
-  <table><thead><tr><th>ID</th><th>Severidad</th><th>Hallazgo</th><th>Acción</th></tr></thead><tbody>${findingsToRows(contractFindings)}</tbody></table>
+  ${contractFindings.map(findingToCard).join('')}
 
   ${crossDomain.length > 0 ? `
   <h2>🔗 Conflictos Inter-disciplinarios (${crossDomain.length})</h2>
-  <table><thead><tr><th>ID</th><th>Severidad</th><th>Hallazgo</th><th>Acción</th></tr></thead><tbody>${findingsToRows(crossDomain)}</tbody></table>` : ''}
+  ${crossDomain.map(findingToCard).join('')}` : ''}
 
   <div style="text-align: center; margin-top: 3rem; color: #64748b; font-size: 0.78rem;">
-    TerraTunnel Analyzer · Multi-Agent Contract & Spec Analyzer · Powered by GLM-5.2
+    TerraTunnel Analyzer · Multi-Agent Contract & Spec Analyzer · Powered by Gemini 2.5 Flash
   </div>
 </body>
 </html>`;
