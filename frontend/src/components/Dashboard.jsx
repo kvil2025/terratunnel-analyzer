@@ -18,6 +18,46 @@ function SeverityBadge({ severity }) {
 function FindingsTable({ findings, title, icon }) {
   if (!findings || findings.length === 0) return null;
 
+  // Normalize findings to handle various formats from Gemini
+  const normalized = findings.map((f, i) => {
+    // If finding is a string, wrap it
+    if (typeof f === 'string') {
+      return { id: `F-${i + 1}`, severity: 'medium', title: '', description: f, recommended_action: '' };
+    }
+
+    // If finding has 'type: text' with raw JSON in description, try to parse it
+    if (f.type === 'text' && f.description && f.description.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(f.description);
+        const innerFindings = parsed.findings || [parsed];
+        return innerFindings.map((inner, j) => ({
+          id: inner.id || `F-${i + 1}.${j + 1}`,
+          severity: inner.severity || inner.combined_severity || inner.risk_level || 'medium',
+          title: inner.title || inner.finding || inner.issue || '',
+          description: inner.description || inner.detail || inner.explanation || '',
+          category: inner.category || inner.type || '',
+          recommended_action: inner.recommended_action || inner.recommendation || inner.action || inner.mitigation || '',
+          spec_reference: inner.spec_reference || inner.reference || inner.clause || '',
+          standard_reference: inner.standard_reference || '',
+        }));
+      } catch { /* fall through */ }
+    }
+
+    // Standard normalization — handle various field names Gemini might use
+    return {
+      id: f.id || `F-${i + 1}`,
+      severity: f.severity || f.combined_severity || f.risk_level || 'medium',
+      title: f.title || f.finding || f.issue || f.name || '',
+      description: f.description || f.detail || f.explanation || f.analysis || '',
+      category: f.category || f.type || f.area || '',
+      recommended_action: f.recommended_action || f.recommendation || f.action || f.mitigation || f.suggested_action || '',
+      spec_reference: f.spec_reference || f.clause_reference || f.reference || f.clause || f.geotech_finding_id || '',
+      standard_reference: f.standard_reference || f.contract_finding_id || f.norm || '',
+    };
+  }).flat(); // flat() handles the case where a single finding expands into multiple
+
+  if (normalized.length === 0) return null;
+
   return (
     <div className="findings-section glass-card">
       <div className="findings-section__title">{icon} {title}</div>
@@ -33,23 +73,23 @@ function FindingsTable({ findings, title, icon }) {
             </tr>
           </thead>
           <tbody>
-            {findings.map((f, i) => (
+            {normalized.map((f, i) => (
               <tr key={f.id || i}>
                 <td>
-                  <div className="findings-table__id">{f.id || `—`}</div>
-                  <div className="findings-table__category">{f.category || f.type || ''}</div>
+                  <div className="findings-table__id">{f.id}</div>
+                  <div className="findings-table__category">{f.category}</div>
                 </td>
-                <td><SeverityBadge severity={f.severity || f.combined_severity || 'medium'} /></td>
+                <td><SeverityBadge severity={f.severity} /></td>
                 <td>
                   <div className="findings-table__title-text">{f.title}</div>
                   <div className="findings-table__description">{f.description}</div>
                 </td>
                 <td style={{ fontSize: '0.75rem', minWidth: 140 }}>
                   <div style={{ color: 'var(--cyan-400)', marginBottom: '0.25rem' }}>
-                    {f.spec_reference || f.clause_reference || f.geotech_finding_id || '—'}
+                    {f.spec_reference || '—'}
                   </div>
                   <div style={{ color: 'var(--text-muted)' }}>
-                    {f.standard_reference || f.contract_finding_id || ''}
+                    {f.standard_reference}
                   </div>
                 </td>
                 <td>
